@@ -34,7 +34,7 @@ class Game
 	attr_reader :status
 	
 	def initialize(player_num)
-		@status = {total: 0, dice: 1, num: 1, game_scene: GAME_START}
+		@status = {total: 0, dice: 1, num: 1, game_scene: GAME_START, player_id: 0}
 		
 		
 		#プレイヤー作る
@@ -53,39 +53,19 @@ class Game
 	
 	#毎ターン呼んで使う
 	def progress_game
-		p "*"*20, "ゲームを進めるよ"
+		#p "*"*20, "ゲームを進めるよ"
 		
-		#もし、誰かがブラフと宣言していたら
+		#もし、誰かがブラフと宣言していたら、ブラフ判定してそこでやめる
 		if @status[:game_scene] == GAME_BLUFF then
-			print "***	ブラフの判定中	***\n"
-			
-			hand_all = subtotal_hand
-			p hand_all, @status
-			
-			#ブラフか判定する
-			dice	= @status[:dice]
-			num		= @status[:num]
-			
-			target_dice = hand_all.select{|item| item == dice}.length
-			
-			print "宣言は、#{dice}が#{num}個\n"
-			print "場には、#{dice}が#{target_dice}個\n"
-			
-			if num > target_dice then
-				p "ブラフだったね"
-			else
-				p "ブラフじゃなかったね。"
-			end
-			
-			#次のシーンへ飛ばす。このゲームは終わり
-			@status[:game_scene] = GAME_CHECK
-			
+			check_bluff
 			return
 		end
 		
 		
 		#存在するプレイヤーの分だけ繰り返していく
-		@players.each do |player|
+		@players.each_with_index do |player, i|
+			
+			@status[:player_id] = i
 			@status = player.play_turn(@status)
 			
 			#だれかがブラフと宣言したら、そこで抜ける
@@ -105,10 +85,52 @@ class Game
 		return hand_all.sort
 	end
 	
+	def check_bluff
+		print "***	ブラフの判定中	***\n"
+		
+		hand_all = subtotal_hand
+		#p hand_all, @status
+		
+		#ブラフか判定する
+		dice	= @status[:dice]
+		num		= @status[:num]
+		
+		target_dice = hand_all.select{|item| item == dice}.length
+		
+		print "宣言は、#{dice}が#{num}個\n"
+		print "場には、#{dice}が#{target_dice}個\n"
+		
+		#宣言をしていたプレイヤーを取得しておく
+		player_id = @status[:player_id]
+		
+		if num > target_dice then
+			p "ブラフだったね"
+			
+			#宣言をした人がペナルティ
+			if player_id == 0 then
+				player_id = -1	#もし先頭のプレイヤーだったら、末端に
+			else
+				player_id -= 1	#そうじゃない場合は、１つ手前のプレイヤーを見る
+			end
+			
+			p "嘘をついた、#{@players[player_id].name}さんのペナルティ"
+			
+		else
+			p "ブラフじゃなかったね。"
+			
+			#ブラフって言った人がペナルティ
+			p "間違ってブラフって言ってしまった、#{@players[player_id].name}さんのペナルティ"
+			
+		end
+		
+		#次のシーンへ飛ばす。このゲームは終わり
+		@status[:game_scene] = GAME_CHECK
+	end
+	
 end
 
 class Player
-	attr_reader :dice_num, :hand
+	attr_reader :dice_num, :hand, :name
 	
 	@@player_num = 0
 	
@@ -189,11 +211,13 @@ class Player
 	
 	#そのターンにやるプレイヤーの処理
 	def play_turn(status)
-		hantei = rand(0..1)
 		
-		if hantei == 0 then
+		#ブラフか〜は今、仮にしている。
+		hantei = rand(0..2)
+		
+		if hantei != 0 then
 			print "#{@name}	:ブラフではない。\n"
-			p "ベットを吊り上げる。"
+			#p "ベットを吊り上げる。"
 			status = raise_a_bet(status)
 		else
 			#もしブラフだと思ったら、シーンを切り替える
@@ -207,14 +231,13 @@ end
 
 ##########################################################################################
 
-game = Game.new(2)
+game = Game.new(3)
 
-fuga = 10
+fuga = 5
 fuga.times do
-	game.get_scene
 	game.progress_game
 	
-	p game.status
+	#p game.status
 	if game.status[:game_scene] == GAME_CHECK then
 		p "このゲーム終了"
 		break
