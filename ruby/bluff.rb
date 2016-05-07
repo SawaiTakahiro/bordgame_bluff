@@ -24,14 +24,18 @@ require ENV["PATH_MY_LIBRARY"]
 ##########################################################################################
 DICE_MAX = 5	#初期のサイコロは５個
 
+#ゲームの状態を管理
+GAME_START	= 0
+GAME_BLUFF	= 100
+GAME_CHECK	= 200
+
 
 class Game
-	attr_reader :game_scene
+	attr_reader :status
 	
-	GAME_START = 0
 	def initialize(player_num)
-		@game_scene = GAME_START
-		@status = {total: 0, dice: 0, num: 0}
+		@status = {total: 0, dice: 1, num: 1, game_scene: GAME_START}
+		
 		
 		#プレイヤー作る
 		@players = Array.new
@@ -40,7 +44,7 @@ class Game
 			@status[:total] += DICE_MAX
 		end
 		
-		p "ゲーム作ったよ"
+		#p "ゲーム作ったよ"
 	end
 	
 	def get_scene
@@ -51,11 +55,54 @@ class Game
 	def progress_game
 		p "*"*20, "ゲームを進めるよ"
 		
+		#もし、誰かがブラフと宣言していたら
+		if @status[:game_scene] == GAME_BLUFF then
+			print "***	ブラフの判定中	***\n"
+			
+			hand_all = subtotal_hand
+			p hand_all, @status
+			
+			#ブラフか判定する
+			dice	= @status[:dice]
+			num		= @status[:num]
+			
+			target_dice = hand_all.select{|item| item == dice}.length
+			
+			print "宣言は、#{dice}が#{num}個\n"
+			print "場には、#{dice}が#{target_dice}個\n"
+			
+			if num > target_dice then
+				p "ブラフだったね"
+			else
+				p "ブラフじゃなかったね。"
+			end
+			
+			#次のシーンへ飛ばす。このゲームは終わり
+			@status[:game_scene] = GAME_CHECK
+			
+			return
+		end
+		
+		
 		#存在するプレイヤーの分だけ繰り返していく
 		@players.each do |player|
 			@status = player.play_turn(@status)
+			
+			#だれかがブラフと宣言したら、そこで抜ける
+			break if @status[:game_scene] == GAME_BLUFF
 		end
 		
+	end
+	
+	def subtotal_hand
+		p "ダイスの集計するよ"
+		
+		hand_all = Array.new
+		
+		#存在するプレイヤーの分だけ繰り返していく
+		@players.each {|player| hand_all += player.hand}
+		
+		return hand_all.sort
 	end
 	
 end
@@ -75,7 +122,7 @@ class Player
 		
 		@@player_num += 1
 		
-		p "playerクラス作ったよ。今のプレイヤー数は、#{@@player_num}人だよ"
+		#p "playerクラス作ったよ。今のプレイヤー数は、#{@@player_num}人だよ"
 	end
 	
 	def get_hand(dice_num)
@@ -117,7 +164,7 @@ class Player
 			#場に出ている数より多く指定していたら、とりあえずOK
 			if new_num > num
 				print "		数の吊り上げ\n"
-				num = new_num
+				status[:num] = new_num
 				
 				flag = true
 				next
@@ -126,7 +173,7 @@ class Player
 			#同じ数だったとしても、目の数字が大きくなっていればOK
 			if new_dice > dice && new_num >= num
 				print "		目の吊り上げ\n"
-				dice = new_dice
+				status[:dice] = new_dice
 				
 				flag = true
 				next
@@ -135,7 +182,6 @@ class Player
 			print "		***見直してみるよ...	#{new_dice} : #{new_num}\n"
 		end
 		
-		status = {total: total, dice: dice, num: num}
 		print "		変更後：#{status}\n"
 		
 		return status
@@ -143,10 +189,17 @@ class Player
 	
 	#そのターンにやるプレイヤーの処理
 	def play_turn(status)
-		p status
-		print "#{@name}	:ブラフではない。\n"
-		p "ベットを吊り上げる。"
-		status = raise_a_bet(status)
+		hantei = rand(0..1)
+		
+		if hantei == 0 then
+			print "#{@name}	:ブラフではない。\n"
+			p "ベットを吊り上げる。"
+			status = raise_a_bet(status)
+		else
+			#もしブラフだと思ったら、シーンを切り替える
+			print "#{@name}	:ブラフ！\n"
+			status[:game_scene] = GAME_BLUFF
+		end
 		
 		return status
 	end
@@ -154,10 +207,17 @@ end
 
 ##########################################################################################
 
-game = Game.new(4)
+game = Game.new(2)
 
-fuga = 5
+fuga = 10
 fuga.times do
 	game.get_scene
 	game.progress_game
+	
+	p game.status
+	if game.status[:game_scene] == GAME_CHECK then
+		p "このゲーム終了"
+		break
+	end
+	
 end
